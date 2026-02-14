@@ -4,9 +4,9 @@ let currentUser = null;
 let currentChat = null; // { type: 'private', userId, username, name, dp }
 let currentGroup = null;
 let token = localStorage.getItem('token');
-let cropCanvas = document.getElementById('crop-canvas');
-let ctx = cropCanvas.getContext('2d');
-let selectedFile = null;
+
+// API बेस URL (अगर अलग पोर्ट पर हो तो बदलें, वरना ऐसे ही रहने दें)
+const API_BASE = '';
 
 // ===================== DOM एलिमेंट्स =====================
 const authScreen = document.getElementById('auth-screen');
@@ -19,6 +19,7 @@ const registerForm = document.getElementById('register-form');
 const loginBtn = document.getElementById('login-btn');
 const registerBtn = document.getElementById('register-btn');
 const logoutBtn = document.getElementById('logout-btn');
+const botLogout = document.getElementById('bot-logout');
 const loginError = document.getElementById('login-error');
 const registerError = document.getElementById('register-error');
 const sidebarDp = document.getElementById('sidebar-dp');
@@ -34,12 +35,14 @@ const chatList = document.getElementById('chat-list');
 const chatWindow = document.getElementById('chat-window');
 const messagesDiv = document.getElementById('messages');
 const chatWith = document.getElementById('chat-with');
+const chatDp = document.getElementById('chat-dp');
 const backToChats = document.getElementById('back-to-chats');
 const messageText = document.getElementById('message-text');
 const sendMessage = document.getElementById('send-message');
 const groupList = document.getElementById('group-list');
 const groupWindow = document.getElementById('group-window');
 const groupNameSpan = document.getElementById('group-name');
+const groupDp = document.getElementById('group-dp');
 const groupMessagesDiv = document.getElementById('group-messages');
 const backToGroups = document.getElementById('back-to-groups');
 const groupMessageText = document.getElementById('group-message-text');
@@ -58,8 +61,9 @@ const oldPassword = document.getElementById('old-password');
 const newPassword = document.getElementById('new-password');
 const changePassword = document.getElementById('change-password');
 const regDp = document.getElementById('reg-dp');
-const dpPreview = document.getElementById('dp-preview');
-const cropBtn = document.getElementById('crop-btn');
+const dpFileName = document.getElementById('dp-file-name');
+const menuToggle = document.getElementById('menu-toggle');
+const sidebar = document.getElementById('sidebar');
 const botMessage = document.getElementById('bot-message');
 const sendBotMessage = document.getElementById('send-bot-message');
 const botMessagesDiv = document.getElementById('bot-messages');
@@ -76,108 +80,107 @@ function showScreen(screenId) {
 
 function formatTime(timestamp) {
     const date = new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const now = new Date();
+    const diff = now - date;
+    if (diff < 60000) return 'अभी';
+    if (diff < 3600000) return `${Math.floor(diff/60000)} मिनट पहले`;
+    if (diff < 86400000) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleDateString();
 }
 
-// ===================== ऑटो-कॉपी फोन नंबर =====================
 function copyToClipboard(text) {
     navigator.clipboard.writeText(text).then(() => {
-        alert('स्वर्ग नंबर कॉपी हो गया: ' + text);
+        alert('✅ स्वर्ग नंबर कॉपी हो गया: ' + text);
+    }).catch(() => {
+        prompt('कॉपी करने के लिए यह नंबर है:', text);
     });
 }
 
-// ===================== डीपी क्रॉप फंक्शन =====================
+// ===================== डीपी फाइल नाम दिखाना =====================
 regDp.addEventListener('change', function(e) {
     const file = e.target.files[0];
-    if (!file) return;
-    if (file.size > 100 * 1024 * 1024) {
-        alert('फाइल 100 MB से छोटी होनी चाहिए');
-        return;
+    if (file) {
+        if (file.size > 100 * 1024 * 1024) {
+            alert('❌ फाइल 100 MB से छोटी होनी चाहिए');
+            regDp.value = '';
+            dpFileName.innerText = 'कोई फाइल नहीं चुनी';
+        } else {
+            dpFileName.innerText = file.name;
+        }
+    } else {
+        dpFileName.innerText = 'कोई फाइल नहीं चुनी';
     }
-    selectedFile = file;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-            // सिंपल क्रॉप (स्क्वायर)
-            cropCanvas.width = 300;
-            cropCanvas.height = 300;
-            ctx.drawImage(img, 0, 0, 300, 300);
-            cropCanvas.style.display = 'block';
-            cropBtn.style.display = 'block';
-            // प्रीव्यू दिखाएँ
-            const previewImg = document.createElement('img');
-            previewImg.src = cropCanvas.toDataURL();
-            dpPreview.innerHTML = '';
-            dpPreview.appendChild(previewImg);
-        };
-        img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-});
-
-cropBtn.addEventListener('click', function() {
-    // क्रॉप की गई इमेज को ब्लॉब में बदलें
-    cropCanvas.toBlob(blob => {
-        selectedFile = new File([blob], 'dp.jpg', { type: 'image/jpeg' });
-        alert('डीपी क्रॉप हो गई!');
-    });
 });
 
 // ===================== रजिस्ट्रेशन =====================
 registerBtn.addEventListener('click', async () => {
-    const name = document.getElementById('reg-name').value;
-    const username = document.getElementById('reg-username').value;
+    const name = document.getElementById('reg-name').value.trim();
+    const username = document.getElementById('reg-username').value.trim();
     const password = document.getElementById('reg-password').value;
+    const dpFile = regDp.files[0];
+
     if (!name || !username || !password) {
-        registerError.innerText = 'सभी फील्ड भरें';
+        registerError.innerText = '❌ सभी फील्ड भरें';
         return;
     }
+
+    if (username.includes(' ')) {
+        registerError.innerText = '❌ यूज़रनेम में स्पेस नहीं हो सकता';
+        return;
+    }
+
     const formData = new FormData();
     formData.append('name', name);
     formData.append('username', username);
     formData.append('password', password);
-    if (selectedFile) formData.append('dp', selectedFile);
+    if (dpFile) formData.append('dp', dpFile);
 
     try {
-        const res = await fetch('/api/register', {
+        registerError.innerText = '⏳ रजिस्टर हो रहा है...';
+        const res = await fetch(API_BASE + '/api/register', {
             method: 'POST',
             body: formData
         });
+        
         const data = await res.json();
         if (res.ok) {
             copyToClipboard(data.phoneNumber);
-            alert('रजिस्ट्रेशन सफल! आपका स्वर्ग नंबर कॉपी हो गया है।');
-            // लॉगिन टैब पर जाएँ
+            alert('🎉 रजिस्ट्रेशन सफल! आपका स्वर्ग नंबर कॉपी हो गया है।');
             loginTab.click();
+            registerError.innerText = '';
         } else {
-            registerError.innerText = data.error;
+            registerError.innerText = '❌ ' + (data.error || 'कुछ गलत हुआ');
         }
     } catch (err) {
-        registerError.innerText = 'सर्वर से कनेक्ट नहीं हो सका';
+        console.error(err);
+        registerError.innerText = '❌ सर्वर से कनेक्ट नहीं हो सका। सुनिश्चित करें कि सर्वर चल रहा है।';
     }
 });
 
 // ===================== लॉगिन =====================
 loginBtn.addEventListener('click', async () => {
-    const username = document.getElementById('login-username').value;
+    const username = document.getElementById('login-username').value.trim();
     const password = document.getElementById('login-password').value;
+
     if (!username || !password) {
-        loginError.innerText = 'यूज़रनेम/नंबर और पासवर्ड दें';
+        loginError.innerText = '❌ यूज़रनेम/नंबर और पासवर्ड दें';
         return;
     }
+
     try {
-        const res = await fetch('/api/login', {
+        loginError.innerText = '⏳ लॉगिन हो रहा है...';
+        const res = await fetch(API_BASE + '/api/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
         });
+        
         const data = await res.json();
         if (res.ok) {
             token = data.token;
             localStorage.setItem('token', token);
             currentUser = data.user;
-            // बॉट चेक
+            
             if (currentUser.username === 'SwargBot') {
                 showScreen('bot');
                 loadBotMessages();
@@ -190,12 +193,16 @@ loginBtn.addEventListener('click', async () => {
                 loadGroups();
                 loadContacts();
                 loadSettings();
+                // साइडबार बंद करें अगर खुला हो
+                sidebar.classList.remove('active');
             }
+            loginError.innerText = '';
         } else {
-            loginError.innerText = data.error;
+            loginError.innerText = '❌ ' + (data.error || 'गलत यूज़रनेम/पासवर्ड');
         }
     } catch (err) {
-        loginError.innerText = 'सर्वर एरर';
+        console.error(err);
+        loginError.innerText = '❌ सर्वर से कनेक्ट नहीं हो सका। सुनिश्चित करें कि सर्वर चल रहा है।';
     }
 });
 
@@ -210,46 +217,88 @@ logoutBtn.addEventListener('click', () => {
     registerForm.classList.remove('active');
     loginTab.classList.add('active');
     registerTab.classList.remove('active');
+    sidebar.classList.remove('active');
 });
+
+botLogout.addEventListener('click', logoutBtn.click);
 
 // ===================== सॉकेट कनेक्शन =====================
 function connectSocket() {
-    socket = io({ query: { token } });
+    if (!token) return;
+    socket = io({
+        query: { token },
+        transports: ['websocket'],
+        reconnection: true
+    });
+    
+    socket.on('connect', () => {
+        console.log('✅ Socket connected');
+        document.getElementById('online-status').classList.add('online');
+    });
+
+    socket.on('connect_error', (err) => {
+        console.log('❌ Socket error', err);
+        document.getElementById('online-status').classList.remove('online');
+    });
+
     socket.on('private message', (msg) => {
         if (currentChat && currentChat.type === 'private' && currentChat.userId === msg.senderId) {
             displayMessage(msg, 'received');
+            // Mark as read
+            socket.emit('mark read', { messageId: msg._id });
         }
         loadChats(); // चैट लिस्ट अपडेट
+        showNotification('नया मैसेज', msg.text);
     });
+
     socket.on('group message', (msg) => {
         if (currentGroup && currentGroup._id === msg.groupId) {
             displayGroupMessage(msg);
         }
         loadGroups();
     });
+
     socket.on('message status', (data) => {
-        // मैसेज स्टेटस अपडेट (ब्लू टिक)
         const msgDiv = document.querySelector(`[data-msg-id="${data.messageId}"]`);
         if (msgDiv) {
             const statusSpan = msgDiv.querySelector('.message-status');
             if (statusSpan) statusSpan.innerHTML = '✓✓';
         }
     });
+
+    socket.on('system message', (data) => {
+        // बॉट का वर्ल्ड मैसेज
+        alert('🌍 ' + data.text);
+    });
+}
+
+// ===================== नोटिफिकेशन =====================
+function showNotification(title, body) {
+    if (Notification.permission === 'granted') {
+        new Notification(title, { body });
+    } else if (Notification.permission !== 'denied') {
+        Notification.requestPermission().then(perm => {
+            if (perm === 'granted') {
+                new Notification(title, { body });
+            }
+        });
+    }
 }
 
 // ===================== साइडबार अपडेट =====================
 function updateSidebar() {
     sidebarName.innerText = currentUser.name;
     sidebarUsername.innerText = '@' + currentUser.username;
-    sidebarDp.src = currentUser.dp ? currentUser.dp : 'default-avatar.png';
+    sidebarDp.src = currentUser.dp ? currentUser.dp : 'https://via.placeholder.com/80';
 }
 
 // ===================== फीड =====================
 async function loadFeed() {
     try {
-        const res = await fetch('/api/feed', {
+        const res = await fetch(API_BASE + '/api/feed', {
             headers: { 'Authorization': 'Bearer ' + token }
         });
+        if (!res.ok) throw new Error('Feed load failed');
         const posts = await res.json();
         feedPosts.innerHTML = '';
         posts.forEach(post => {
@@ -258,6 +307,7 @@ async function loadFeed() {
         });
     } catch (err) {
         console.log(err);
+        feedPosts.innerHTML = '<p style="text-align:center; color:var(--text-secondary);">कोई पोस्ट नहीं या लोड नहीं हो सका</p>';
     }
 }
 
@@ -266,14 +316,14 @@ function createPostElement(post) {
     div.className = 'post';
     div.innerHTML = `
         <div class="post-header">
-            <img src="${post.user.dp || 'default-avatar.png'}" alt="DP">
+            <img src="${post.user.dp || 'https://via.placeholder.com/45'}" alt="DP">
             <div>
-                <div class="post-user">${post.user.name} <span>@${post.user.username}</span></div>
+                <div class="post-user">${post.user.name} <span style="color:var(--text-secondary);">@${post.user.username}</span></div>
                 <div class="post-time">${formatTime(post.createdAt)}</div>
             </div>
         </div>
         <div class="post-content">${post.content}</div>
-        ${post.mediaUrl ? `<img src="${post.mediaUrl}" class="post-media">` : ''}
+        ${post.mediaUrl ? `<img src="${post.mediaUrl}" class="post-media" loading="lazy">` : ''}
         <div class="post-actions">
             <button class="like-btn ${post.likedByUser ? 'liked' : ''}" data-post-id="${post._id}">
                 <i class="fas fa-heart"></i> ${post.likesCount}
@@ -291,31 +341,37 @@ function createPostElement(post) {
             `).join('')}
         </div>
     `;
-    // लाइक इवेंट
     div.querySelector('.like-btn').addEventListener('click', () => toggleLike(post._id));
     return div;
 }
 
 async function toggleLike(postId) {
     try {
-        const res = await fetch(`/api/post/${postId}/like`, {
+        const res = await fetch(API_BASE + `/api/post/${postId}/like`, {
             method: 'POST',
             headers: { 'Authorization': 'Bearer ' + token }
         });
         if (res.ok) {
-            loadFeed(); // रीलोड फीड
+            loadFeed();
         }
     } catch (err) {}
 }
 
 postBtn.addEventListener('click', async () => {
-    const content = postContent.value;
+    const content = postContent.value.trim();
     const file = postMedia.files[0];
+    
+    if (!content && !file) {
+        alert('कुछ लिखें या मीडिया चुनें');
+        return;
+    }
+
     const formData = new FormData();
     formData.append('content', content);
     if (file) formData.append('media', file);
+    
     try {
-        await fetch('/api/post', {
+        await fetch(API_BASE + '/api/post', {
             method: 'POST',
             headers: { 'Authorization': 'Bearer ' + token },
             body: formData
@@ -329,43 +385,51 @@ postBtn.addEventListener('click', async () => {
 // ===================== चैट =====================
 async function loadChats() {
     try {
-        const res = await fetch('/api/chats', {
+        const res = await fetch(API_BASE + '/api/chats', {
             headers: { 'Authorization': 'Bearer ' + token }
         });
+        if (!res.ok) throw new Error();
         const chats = await res.json();
         chatList.innerHTML = '';
+        if (chats.length === 0) {
+            chatList.innerHTML = '<p style="text-align:center; color:var(--text-secondary);">कोई चैट नहीं</p>';
+            return;
+        }
         chats.forEach(chat => {
             const div = document.createElement('div');
             div.className = 'chat-item';
             div.innerHTML = `
-                <img src="${chat.user.dp || 'default-avatar.png'}">
+                <img src="${chat.user.dp || 'https://via.placeholder.com/50'}">
                 <div class="chat-info">
                     <h4>${chat.user.name}</h4>
-                    <p>${chat.lastMessage ? chat.lastMessage.text : ''}</p>
+                    <p>${chat.lastMessage ? chat.lastMessage.text.substring(0,30) + '...' : ''}</p>
                 </div>
             `;
             div.addEventListener('click', () => openChat(chat.user));
             chatList.appendChild(div);
         });
-    } catch (err) {}
+    } catch (err) {
+        chatList.innerHTML = '<p style="text-align:center; color:var(--text-secondary);">चैट लोड नहीं हुई</p>';
+    }
 }
 
 function openChat(user) {
     currentChat = { type: 'private', userId: user._id, username: user.username, name: user.name, dp: user.dp };
     chatWith.innerText = user.name;
+    chatDp.src = user.dp || 'https://via.placeholder.com/40';
     chatWindow.style.display = 'flex';
     loadMessages(user._id);
 }
 
 async function loadMessages(userId) {
     try {
-        const res = await fetch(`/api/messages/${userId}`, {
+        const res = await fetch(API_BASE + `/api/messages/${userId}`, {
             headers: { 'Authorization': 'Bearer ' + token }
         });
         const msgs = await res.json();
         messagesDiv.innerHTML = '';
         msgs.forEach(msg => {
-            displayMessage(msg, msg.senderId === currentUser._id ? 'sent' : 'received');
+            displayMessage(msg, msg.sender === currentUser._id ? 'sent' : 'received');
         });
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
     } catch (err) {}
@@ -391,10 +455,10 @@ messageText.addEventListener('keypress', (e) => {
 });
 
 async function sendPrivateMessage() {
-    const text = messageText.value;
+    const text = messageText.value.trim();
     if (!text || !currentChat) return;
     try {
-        const res = await fetch('/api/message', {
+        const res = await fetch(API_BASE + '/api/message', {
             method: 'POST',
             headers: {
                 'Authorization': 'Bearer ' + token,
@@ -419,19 +483,23 @@ backToChats.addEventListener('click', () => {
 // ===================== ग्रुप =====================
 async function loadGroups() {
     try {
-        const res = await fetch('/api/groups', {
+        const res = await fetch(API_BASE + '/api/groups', {
             headers: { 'Authorization': 'Bearer ' + token }
         });
         const groups = await res.json();
         groupList.innerHTML = '';
+        if (groups.length === 0) {
+            groupList.innerHTML = '<p style="text-align:center; color:var(--text-secondary);">कोई ग्रुप नहीं</p>';
+            return;
+        }
         groups.forEach(group => {
             const div = document.createElement('div');
             div.className = 'group-item';
             div.innerHTML = `
-                <img src="${group.photo || 'default-group.png'}">
+                <img src="${group.photo || 'https://via.placeholder.com/50'}">
                 <div class="group-info">
                     <h4>${group.name}</h4>
-                    <p>${group.members.length} members</p>
+                    <p>${group.members.length} सदस्य</p>
                 </div>
             `;
             div.addEventListener('click', () => openGroup(group));
@@ -443,13 +511,14 @@ async function loadGroups() {
 function openGroup(group) {
     currentGroup = group;
     groupNameSpan.innerText = group.name;
+    groupDp.src = group.photo || 'https://via.placeholder.com/40';
     groupWindow.style.display = 'flex';
     loadGroupMessages(group._id);
 }
 
 async function loadGroupMessages(groupId) {
     try {
-        const res = await fetch(`/api/group/${groupId}/messages`, {
+        const res = await fetch(API_BASE + `/api/group/${groupId}/messages`, {
             headers: { 'Authorization': 'Bearer ' + token }
         });
         const msgs = await res.json();
@@ -457,6 +526,7 @@ async function loadGroupMessages(groupId) {
         msgs.forEach(msg => {
             displayGroupMessage(msg);
         });
+        groupMessagesDiv.scrollTop = groupMessagesDiv.scrollHeight;
     } catch (err) {}
 }
 
@@ -476,10 +546,10 @@ groupMessageText.addEventListener('keypress', (e) => {
 });
 
 async function sendGroupMsg() {
-    const text = groupMessageText.value;
+    const text = groupMessageText.value.trim();
     if (!text || !currentGroup) return;
     try {
-        const res = await fetch(`/api/group/${currentGroup._id}/message`, {
+        const res = await fetch(API_BASE + `/api/group/${currentGroup._id}/message`, {
             method: 'POST',
             headers: {
                 'Authorization': 'Bearer ' + token,
@@ -505,7 +575,7 @@ createGroupBtn.addEventListener('click', async () => {
     const name = prompt('ग्रुप का नाम दें:');
     if (!name) return;
     try {
-        const res = await fetch('/api/group', {
+        const res = await fetch(API_BASE + '/api/group', {
             method: 'POST',
             headers: {
                 'Authorization': 'Bearer ' + token,
@@ -522,16 +592,20 @@ createGroupBtn.addEventListener('click', async () => {
 // ===================== कॉन्टैक्ट =====================
 async function loadContacts() {
     try {
-        const res = await fetch('/api/contacts', {
+        const res = await fetch(API_BASE + '/api/contacts', {
             headers: { 'Authorization': 'Bearer ' + token }
         });
         const contacts = await res.json();
         contactList.innerHTML = '';
+        if (contacts.length === 0) {
+            contactList.innerHTML = '<p style="text-align:center; color:var(--text-secondary);">कोई कॉन्टैक्ट नहीं</p>';
+            return;
+        }
         contacts.forEach(contact => {
             const div = document.createElement('div');
             div.className = 'contact-item';
             div.innerHTML = `
-                <img src="${contact.user.dp || 'default-avatar.png'}">
+                <img src="${contact.user.dp || 'https://via.placeholder.com/50'}">
                 <div>
                     <h4>${contact.customName || contact.user.name}</h4>
                     <p>@${contact.user.username}</p>
@@ -547,24 +621,29 @@ async function loadContacts() {
 }
 
 addContactBtn.addEventListener('click', async () => {
-    const phone = contactPhone.value;
-    const customName = contactName.value;
-    if (!phone) return;
+    const phone = contactPhone.value.trim();
+    const customName = contactName.value.trim();
+    if (!phone) {
+        alert('फोन नंबर दर्ज करें');
+        return;
+    }
     try {
-        const res = await fetch('/api/contact', {
+        const res = await fetch(API_BASE + '/api/contact', {
             method: 'POST',
             headers: {
                 'Authorization': 'Bearer ' + token,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ phoneNumber: phone, customName })
+            body: JSON.stringify({ phoneNumber: phone, customName: customName || undefined })
         });
         if (res.ok) {
             contactPhone.value = '';
             contactName.value = '';
             loadContacts();
+            alert('कॉन्टैक्ट सेव हो गया');
         } else {
-            alert('यूज़र नहीं मिला');
+            const data = await res.json();
+            alert(data.error || 'यूज़र नहीं मिला');
         }
     } catch (err) {}
 });
@@ -573,19 +652,20 @@ addContactBtn.addEventListener('click', async () => {
 function loadSettings() {
     settingsName.value = currentUser.name;
     settingsUsername.value = currentUser.username;
-    settingsDpPreview.src = currentUser.dp || 'default-avatar.png';
+    settingsDpPreview.src = currentUser.dp || 'https://via.placeholder.com/80';
 }
 
 updateProfile.addEventListener('click', async () => {
-    const name = settingsName.value;
-    const username = settingsUsername.value;
+    const name = settingsName.value.trim();
+    const username = settingsUsername.value.trim();
     const file = settingsDp.files[0];
     const formData = new FormData();
-    formData.append('name', name);
-    formData.append('username', username);
+    if (name) formData.append('name', name);
+    if (username) formData.append('username', username);
     if (file) formData.append('dp', file);
+    
     try {
-        const res = await fetch('/api/user', {
+        const res = await fetch(API_BASE + '/api/user', {
             method: 'PUT',
             headers: { 'Authorization': 'Bearer ' + token },
             body: formData
@@ -595,6 +675,7 @@ updateProfile.addEventListener('click', async () => {
             currentUser = updated;
             updateSidebar();
             alert('प्रोफाइल अपडेट हो गया');
+            loadSettings();
         }
     } catch (err) {}
 });
@@ -602,9 +683,12 @@ updateProfile.addEventListener('click', async () => {
 changePassword.addEventListener('click', async () => {
     const old = oldPassword.value;
     const newPwd = newPassword.value;
-    if (!old || !newPwd) return;
+    if (!old || !newPwd) {
+        alert('दोनों पासवर्ड भरें');
+        return;
+    }
     try {
-        const res = await fetch('/api/user/password', {
+        const res = await fetch(API_BASE + '/api/user/password', {
             method: 'PUT',
             headers: {
                 'Authorization': 'Bearer ' + token,
@@ -630,13 +714,29 @@ navBtns.forEach(btn => {
         const screenId = btn.dataset.screen;
         contentScreens.forEach(s => s.classList.remove('active'));
         document.getElementById(screenId + '-screen').classList.add('active');
-        // लोड डेटा अगर जरूरत हो
+        
+        // मोबाइल पर साइडबार बंद करें
+        sidebar.classList.remove('active');
+        
         if (screenId === 'feed') loadFeed();
         else if (screenId === 'chats') loadChats();
         else if (screenId === 'groups') loadGroups();
         else if (screenId === 'contacts') loadContacts();
         else if (screenId === 'settings') loadSettings();
     });
+});
+
+menuToggle.addEventListener('click', () => {
+    sidebar.classList.toggle('active');
+});
+
+// साइडबार के बाहर क्लिक करने पर बंद करें
+document.addEventListener('click', (e) => {
+    if (window.innerWidth < 768) {
+        if (!sidebar.contains(e.target) && !menuToggle.contains(e.target)) {
+            sidebar.classList.remove('active');
+        }
+    }
 });
 
 loginTab.addEventListener('click', () => {
@@ -654,16 +754,15 @@ registerTab.addEventListener('click', () => {
 });
 
 // ===================== बॉट फंक्शन =====================
-async function loadBotMessages() {
-    // बॉट के लिए सिर्फ वर्ल्ड चैट दिखेगी
-    botMessagesDiv.innerHTML = '';
+function loadBotMessages() {
+    botMessagesDiv.innerHTML = '<p style="text-align:center; color:var(--text-secondary);">🌍 यहाँ लिखकर दुनिया को संदेश भेजें</p>';
 }
 
 sendBotMessage.addEventListener('click', async () => {
-    const msg = botMessage.value;
+    const msg = botMessage.value.trim();
     if (!msg) return;
     try {
-        const res = await fetch('/api/bot/world', {
+        const res = await fetch(API_BASE + '/api/bot/world', {
             method: 'POST',
             headers: {
                 'Authorization': 'Bearer ' + token,
@@ -672,42 +771,56 @@ sendBotMessage.addEventListener('click', async () => {
             body: JSON.stringify({ message: msg })
         });
         if (res.ok) {
-            botMessage.value = '';
-            // बॉट के अपने चैट में दिखाएँ
             const div = document.createElement('div');
             div.className = 'message sent';
             div.innerHTML = `<div>${msg}</div><div class="message-time">अभी</div>`;
             botMessagesDiv.appendChild(div);
+            botMessage.value = '';
+            botMessagesDiv.scrollTop = botMessagesDiv.scrollHeight;
+        } else {
+            alert('केवल बॉट ही वर्ल्ड मैसेज भेज सकता है');
         }
     } catch (err) {}
 });
 
 // ===================== इनिशियल चेक =====================
-if (token) {
-    // टोken से यूजर लोड करें
-    fetch('/api/me', { headers: { 'Authorization': 'Bearer ' + token } })
-    .then(res => res.json())
-    .then(user => {
-        currentUser = user;
-        if (user.username === 'SwargBot') {
-            showScreen('bot');
-            loadBotMessages();
-        } else {
-            showScreen('main');
-            updateSidebar();
-            connectSocket();
-            loadFeed();
-            loadChats();
-            loadGroups();
-            loadContacts();
-            loadSettings();
+async function checkLogin() {
+    if (token) {
+        try {
+            const res = await fetch(API_BASE + '/api/me', { 
+                headers: { 'Authorization': 'Bearer ' + token } 
+            });
+            if (res.ok) {
+                const user = await res.json();
+                currentUser = user;
+                if (user.username === 'SwargBot') {
+                    showScreen('bot');
+                    loadBotMessages();
+                } else {
+                    showScreen('main');
+                    updateSidebar();
+                    connectSocket();
+                    loadFeed();
+                    loadChats();
+                    loadGroups();
+                    loadContacts();
+                    loadSettings();
+                    // नोटिफिकेशन परमिशन
+                    if (Notification.permission === 'default') {
+                        Notification.requestPermission();
+                    }
+                }
+            } else {
+                localStorage.removeItem('token');
+                showScreen('auth');
+            }
+        } catch (err) {
+            localStorage.removeItem('token');
+            showScreen('auth');
         }
-    })
-    .catch(() => {
-        localStorage.removeItem('token');
+    } else {
         showScreen('auth');
-    });
-} else {
-    showScreen('auth');
     }
-  
+}
+
+checkLogin();
