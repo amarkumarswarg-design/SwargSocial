@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>स्वर्ग सोशल</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1e1e2f">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Auth Screens -->
+        <div id="auth-screen" class="screen active">
+            <div class="auth-tabs">
+                <button class="tab-btn active" id="login-tab">लॉगिन</button>
+                <button class="tab-btn" id="register-tab">रजिस्टर</button>
+            </div>
+            <div id="login-form" class="auth-form active">
+                <h2>स्वर्ग में आपका स्वागत</h2>
+                <input type="text" id="login-username" placeholder="यूज़रनेम या स्वर्ग नंबर">
+                <input type="password" id="login-password" placeholder="पासवर्ड">
+                <button id="login-btn">लॉगिन</button>
+                <p id="login-error" class="error"></p>
+            </div>
+            <div id="register-form" class="auth-form">
+                <h2>नया खाता बनाएँ</h2>
+                <input type="text" id="reg-name" placeholder="नाम">
+                <input type="text" id="reg-username" placeholder="यूज़रनेम (यूनिक)">
+                <input type="password" id="reg-password" placeholder="पासवर्ड">
+                <div class="dp-upload">
+                    <label for="reg-dp">प्रोफाइल फोटो (100 MB तक)</label>
+                    <input type="file" id="reg-dp" accept="image/*">
+                    <div id="dp-preview" class="dp-preview"></div>
+                    <canvas id="crop-canvas" style="display:none;"></canvas>
+                    <button id="crop-btn" style="display:none;">क्रॉप करें</button>
+                </div>
+                <button id="register-btn">रजिस्टर</button>
+                <p id="register-error" class="error"></p>
+            </div>
+        </div>
+
+        <!-- Main App Screen (after login) -->
+        <div id="main-screen" class="screen">
+            <div class="sidebar">
+                <div class="user-info">
+                    <img id="sidebar-dp" src="" alt="DP">
+                    <span id="sidebar-name"></span>
+                    <span id="sidebar-username"></span>
+                </div>
+                <nav>
+                    <button class="nav-btn active" data-screen="feed"><i class="fas fa-newspaper"></i> फीड</button>
+                    <button class="nav-btn" data-screen="chats"><i class="fas fa-comment"></i> चैट</button>
+                    <button class="nav-btn" data-screen="groups"><i class="fas fa-users"></i> ग्रुप</button>
+                    <button class="nav-btn" data-screen="contacts"><i class="fas fa-address-book"></i> कॉन्टैक्ट</button>
+                    <button class="nav-btn" data-screen="settings"><i class="fas fa-cog"></i> सेटिंग</button>
+                </nav>
+                <button id="logout-btn"><i class="fas fa-sign-out-alt"></i> लॉगआउट</button>
+            </div>
+            <div class="main-content">
+                <!-- Feed Screen -->
+                <div id="feed-screen" class="content-screen active">
+                    <div class="create-post">
+                        <textarea id="post-content" placeholder="कुछ सोच रहे हो?"></textarea>
+                        <input type="file" id="post-media" accept="image/*,video/*,audio/*">
+                        <button id="post-btn">पोस्ट करें</button>
+                    </div>
+                    <div id="feed-posts"></div>
+                </div>
+
+                <!-- Chats Screen -->
+                <div id="chats-screen" class="content-screen">
+                    <div class="chat-list" id="chat-list"></div>
+                    <div class="chat-window" id="chat-window" style="display:none;">
+                        <div class="chat-header">
+                            <button id="back-to-chats"><i class="fas fa-arrow-left"></i></button>
+                            <span id="chat-with"></span>
+                        </div>
+                        <div class="messages" id="messages"></div>
+                        <div class="message-input">
+                            <input type="text" id="message-text" placeholder="मैसेज लिखो...">
+                            <button id="send-message"><i class="fas fa-paper-plane"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Groups Screen -->
+                <div id="groups-screen" class="content-screen">
+                    <button id="create-group-btn"><i class="fas fa-plus"></i> नया ग्रुप</button>
+                    <div class="group-list" id="group-list"></div>
+                    <div class="group-window" id="group-window" style="display:none;">
+                        <div class="group-header">
+                            <button id="back-to-groups"><i class="fas fa-arrow-left"></i></button>
+                            <span id="group-name"></span>
+                            <button id="group-info-btn"><i class="fas fa-info-circle"></i></button>
+                        </div>
+                        <div class="group-messages" id="group-messages"></div>
+                        <div class="group-input">
+                            <input type="text" id="group-message-text" placeholder="ग्रुप में मैसेज...">
+                            <button id="send-group-message"><i class="fas fa-paper-plane"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contacts Screen -->
+                <div id="contacts-screen" class="content-screen">
+                    <div class="add-contact">
+                        <input type="text" id="contact-phone" placeholder="स्वर्ग नंबर दर्ज करें">
+                        <input type="text" id="contact-name" placeholder="नाम सेव करें">
+                        <button id="add-contact-btn">कॉन्टैक्ट सेव करें</button>
+                    </div>
+                    <div class="contact-list" id="contact-list"></div>
+                </div>
+
+                <!-- Settings Screen -->
+                <div id="settings-screen" class="content-screen">
+                    <h3>प्रोफाइल सेटिंग</h3>
+                    <input type="text" id="settings-name" placeholder="नाम">
+                    <input type="text" id="settings-username" placeholder="यूज़रनेम">
+                    <input type="file" id="settings-dp" accept="image/*">
+                    <img id="settings-dp-preview" src="" alt="Preview" style="width:100px;">
+                    <button id="update-profile">प्रोफाइल अपडेट करें</button>
+                    
+                    <h3>पासवर्ड बदलें</h3>
+                    <input type="password" id="old-password" placeholder="पुराना पासवर्ड">
+                    <input type="password" id="new-password" placeholder="नया पासवर्ड">
+                    <button id="change-password">पासवर्ड बदलें</button>
+
+                    <h3>क्रिएटर</h3>
+                    <p>Amar Kumar</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bot World Chat (hidden for normal users, only visible when logged in as bot) -->
+        <div id="bot-screen" class="screen" style="display:none;">
+            <div class="bot-header">
+                <h2>🌍 World Chat (बॉट)</h2>
+            </div>
+            <div class="bot-messages" id="bot-messages"></div>
+            <div class="bot-input">
+                <input type="text" id="bot-message" placeholder="दुनिया को संदेश भेजें...">
+                <button id="send-bot-message">भेजें</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PWA service worker registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js')
+            .then(reg => console.log('Service Worker registered'))
+            .catch(err => console.log('Service Worker error', err));
+        }
+    </script>
+    <!-- Socket.io client -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+  </html>
