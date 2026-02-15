@@ -553,4 +553,227 @@ createGroupBtn.addEventListener('click', async () => {
             headers: {
                 'Authorization': 'Bearer ' + token,
                 'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ name })
+        });
+        loadGroups();
+    } catch (err) {}
+});
+
+// ===================== कॉन्टैक्ट =====================
+async function loadContacts() {
+    try {
+        const res = await fetch(API_BASE + '/api/contacts', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const contacts = await res.json();
+        contactList.innerHTML = '';
+        if (contacts.length === 0) {
+            contactList.innerHTML = '<p style="text-align:center; color:var(--text-secondary);">कोई कॉन्टैक्ट नहीं</p>';
+            return;
+        }
+        contacts.forEach(contact => {
+            const div = document.createElement('div');
+            div.className = 'contact-item';
+            div.innerHTML = `
+                <img src="${contact.user.dp || 'https://via.placeholder.com/50'}">
+                <div>
+                    <h4>${contact.customName || contact.user.name}</h4>
+                    <p>@${contact.user.username}</p>
+                </div>
+            `;
+            div.addEventListener('click', () => {
+                openChat(contact.user);
+                document.querySelector('[data-screen="chats"]').click();
+            });
+            contactList.appendChild(div);
+        });
+    } catch (err) {}
+}
+
+addContactBtn.addEventListener('click', async () => {
+    const phone = contactPhone.value.trim();
+    const customName = contactName.value.trim();
+    if (!phone) {
+        alert('फोन नंबर दर्ज करें');
+        return;
+    }
+    try {
+        const res = await fetch(API_BASE + '/api/contact', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer ' + token,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ phoneNumber: phone, customName: customName || undefined })
+        });
+        if (res.ok) {
+            contactPhone.value = '';
+            contactName.value = '';
+            loadContacts();
+            alert('कॉन्टैक्ट सेव हो गया');
+        } else {
+            const data = await res.json();
+            alert(data.error || 'यूज़र नहीं मिला');
+        }
+    } catch (err) {}
+});
+
+// ===================== सेटिंग =====================
+function loadSettings() {
+    settingsName.value = currentUser.name;
+    settingsUsername.value = currentUser.username;
+    settingsDpPreview.src = currentUser.dp || 'https://via.placeholder.com/80';
+}
+
+updateProfile.addEventListener('click', async () => {
+    const name = settingsName.value.trim();
+    const username = settingsUsername.value.trim();
+    const file = settingsDp.files[0];
+    const formData = new FormData();
+    if (name) formData.append('name', name);
+    if (username) formData.append('username', username);
+    if (file) formData.append('dp', file);
+    
+    try {
+        const res = await fetch(API_BASE + '/api/user', {
+            method: 'PUT',
+            headers: { 'Authorization': 'Bearer ' + token },
+            body: formData
+        });
+        if (res.ok) {
+            const updated = await res.json();
+            currentUser = updated;
+            updateSidebar();
+            alert('प्रोफाइल अपडेट हो गया');
+            loadSettings();
+        }
+    } catch (err) {}
+});
+
+changePassword.addEventListener('click', async () => {
+    const old = oldPassword.value;
+    const newPwd = newPassword.value;
+    if (!old || !newPwd) {
+        alert('दोनों पासवर्ड भरें');
+        return;
+    }
+    try {
+        const res = await fetch(API_BASE + '/api/user/password', {
+            method: 'PUT',
+            headers: {
+                'Authorization': 'Bearer ' + token,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ oldPassword: old, newPassword: newPwd })
+        });
+        if (res.ok) {
+            alert('पासवर्ड बदल गया');
+            oldPassword.value = '';
+            newPassword.value = '';
+        } else {
+            alert('पुराना पासवर्ड गलत है');
+        }
+    } catch (err) {}
+});
+
+// ===================== नेविगेशन =====================
+navBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        navBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const screenId = btn.dataset.screen;
+        contentScreens.forEach(s => s.classList.remove('active'));
+        document.getElementById(screenId + '-screen').classList.add('active');
+        sidebar.classList.remove('active');
+        
+        if (screenId === 'feed') loadFeed();
+        else if (screenId === 'chats') loadChats();
+        else if (screenId === 'groups') loadGroups();
+        else if (screenId === 'contacts') loadContacts();
+        else if (screenId === 'settings') loadSettings();
+    });
+});
+
+loginTab.addEventListener('click', () => {
+    loginTab.classList.add('active');
+    registerTab.classList.remove('active');
+    loginForm.classList.add('active');
+    registerForm.classList.remove('active');
+});
+
+registerTab.addEventListener('click', () => {
+    registerTab.classList.add('active');
+    loginTab.classList.remove('active');
+    registerForm.classList.add('active');
+    loginForm.classList.remove('active');
+});
+
+// ===================== बॉट =====================
+function loadBotMessages() {
+    botMessagesDiv.innerHTML = '<p style="text-align:center; color:var(--text-secondary);">🌍 यहाँ लिखकर दुनिया को संदेश भेजें</p>';
+}
+
+sendBotMessage.addEventListener('click', async () => {
+    const msg = botMessage.value.trim();
+    if (!msg) return;
+    try {
+        const res = await fetch(API_BASE + '/api/bot/world', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer ' + token,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ message: msg })
+        });
+        if (res.ok) {
+            const div = document.createElement('div');
+            div.className = 'message sent';
+            div.innerHTML = `<div>${msg}</div><div class="message-time">अभी</div>`;
+            botMessagesDiv.appendChild(div);
+            botMessage.value = '';
+            botMessagesDiv.scrollTop = botMessagesDiv.scrollHeight;
+        } else {
+            alert('केवल बॉट ही वर्ल्ड मैसेज भेज सकता है');
+        }
+    } catch (err) {}
+});
+
+// ===================== इनिशियल चेक =====================
+async function init() {
+    if (token) {
+        try {
+            const res = await fetch(API_BASE + '/api/me', { 
+                headers: { 'Authorization': 'Bearer ' + token } 
+            });
+            if (res.ok) {
+                const user = await res.json();
+                currentUser = user;
+                if (user.username === 'SwargBot') {
+                    showScreen('bot');
+                    loadBotMessages();
+                } else {
+                    showScreen('main');
+                    updateSidebar();
+                    connectSocket();
+                    loadFeed();
+                    loadChats();
+                    loadGroups();
+                    loadContacts();
+                    loadSettings();
+                }
+            } else {
+                localStorage.removeItem('token');
+                showScreen('auth');
+            }
+        } catch (err) {
+            localStorage.removeItem('token');
+            showScreen('auth');
+        }
+    } else {
+        showScreen('auth');
+    }
+}
+
+init();
   
