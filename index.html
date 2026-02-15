@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>स्वर्ग सोशल</title>
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
@@ -20,7 +20,6 @@
                     <button class="tab-btn" id="register-tab">रजिस्टर</button>
                 </div>
                 
-                <!-- Login Form -->
                 <div id="login-form" class="auth-form active">
                     <h2>स्वर्ग में वापसी</h2>
                     <input type="text" id="login-username" placeholder="यूज़रनेम या स्वर्ग नंबर">
@@ -29,7 +28,6 @@
                     <p id="login-error" class="error"></p>
                 </div>
 
-                <!-- Register Form -->
                 <div id="register-form" class="auth-form">
                     <h2>नया खाता बनाएँ</h2>
                     <input type="text" id="reg-name" placeholder="पूरा नाम">
@@ -52,7 +50,6 @@
 
         <!-- Main App Screen -->
         <div id="main-screen" class="screen">
-            <!-- Mobile Top Bar -->
             <div class="mobile-top-bar">
                 <button id="menu-toggle"><i class="fas fa-bars"></i></button>
                 <h2>स्वर्ग सोशल</h2>
@@ -61,7 +58,6 @@
                 </div>
             </div>
 
-            <!-- Sidebar (Hidden on mobile by default) -->
             <div class="sidebar" id="sidebar">
                 <div class="user-info">
                     <img id="sidebar-dp" src="" alt="DP">
@@ -78,9 +74,7 @@
                 <button id="logout-btn"><i class="fas fa-sign-out-alt"></i> <span>लॉगआउट</span></button>
             </div>
 
-            <!-- Main Content Area -->
             <div class="main-content" id="main-content">
-                <!-- Feed Screen -->
                 <div id="feed-screen" class="content-screen active">
                     <div class="create-post">
                         <textarea id="post-content" placeholder="कुछ सोच रहे हो?" rows="3"></textarea>
@@ -95,7 +89,6 @@
                     <div id="feed-posts" class="feed-container"></div>
                 </div>
 
-                <!-- Chats Screen -->
                 <div id="chats-screen" class="content-screen">
                     <div class="chat-list" id="chat-list"></div>
                     <div class="chat-window" id="chat-window">
@@ -105,7 +98,6 @@
                                 <img id="chat-dp" src="" alt="">
                                 <span id="chat-with"></span>
                             </div>
-                            <button id="block-user-btn" style="display: none;"><i class="fas fa-ban"></i></button>
                         </div>
                         <div class="messages" id="messages"></div>
                         <div class="message-input">
@@ -115,7 +107,6 @@
                     </div>
                 </div>
 
-                <!-- Groups Screen -->
                 <div id="groups-screen" class="content-screen">
                     <button id="create-group-btn" class="floating-btn"><i class="fas fa-plus"></i> नया ग्रुप</button>
                     <div class="group-list" id="group-list"></div>
@@ -136,7 +127,6 @@
                     </div>
                 </div>
 
-                <!-- Contacts Screen -->
                 <div id="contacts-screen" class="content-screen">
                     <div class="add-contact">
                         <input type="text" id="contact-phone" placeholder="स्वर्ग नंबर दर्ज करें">
@@ -146,7 +136,6 @@
                     <div class="contact-list" id="contact-list"></div>
                 </div>
 
-                <!-- Settings Screen -->
                 <div id="settings-screen" class="content-screen">
                     <div class="settings-section">
                         <h3>प्रोफाइल सेटिंग</h3>
@@ -187,7 +176,6 @@
             </div>
         </div>
 
-        <!-- Bot World Screen -->
         <div id="bot-screen" class="screen">
             <div class="bot-container">
                 <div class="bot-header">
@@ -203,15 +191,7 @@
         </div>
     </div>
 
-    <!-- PWA Service Worker -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js')
-            .then(reg => console.log('✅ Service Worker registered'))
-            .catch(err => console.log('❌ Service Worker error', err));
-        }
-    </script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>
 </body>
-            </html>
+                                </html>
