@@ -1,11 +1,11 @@
 // ===================== ग्लोबल वेरिएबल =====================
 let socket;
 let currentUser = null;
-let currentChat = null; // { type: 'private', userId, username, name, dp }
+let currentChat = null;
 let currentGroup = null;
 let token = localStorage.getItem('token');
 
-// API बेस URL (अगर अलग पोर्ट पर हो तो बदलें, वरना ऐसे ही रहने दें)
+// Render पर डिप्लॉय होने पर API_BASE खाली रहेगा (same origin)
 const API_BASE = '';
 
 // ===================== DOM एलिमेंट्स =====================
@@ -96,7 +96,7 @@ function copyToClipboard(text) {
     });
 }
 
-// ===================== डीपी फाइल नाम दिखाना =====================
+// ===================== डीपी फाइल नाम =====================
 regDp.addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (file) {
@@ -124,11 +124,6 @@ registerBtn.addEventListener('click', async () => {
         return;
     }
 
-    if (username.includes(' ')) {
-        registerError.innerText = '❌ यूज़रनेम में स्पेस नहीं हो सकता';
-        return;
-    }
-
     const formData = new FormData();
     formData.append('name', name);
     formData.append('username', username);
@@ -143,17 +138,17 @@ registerBtn.addEventListener('click', async () => {
         });
         
         const data = await res.json();
-        if (res.ok) {
-            copyToClipboard(data.phoneNumber);
-            alert('🎉 रजिस्ट्रेशन सफल! आपका स्वर्ग नंबर कॉपी हो गया है।');
-            loginTab.click();
-            registerError.innerText = '';
-        } else {
-            registerError.innerText = '❌ ' + (data.error || 'कुछ गलत हुआ');
+        if (!res.ok) {
+            throw new Error(data.error || `HTTP ${res.status}`);
         }
+        
+        copyToClipboard(data.phoneNumber);
+        alert('🎉 रजिस्ट्रेशन सफल! आपका स्वर्ग नंबर कॉपी हो गया है।');
+        loginTab.click();
+        registerError.innerText = '';
     } catch (err) {
-        console.error(err);
-        registerError.innerText = '❌ सर्वर से कनेक्ट नहीं हो सका। सुनिश्चित करें कि सर्वर चल रहा है।';
+        console.error('Register error:', err);
+        registerError.innerText = '❌ ' + err.message;
     }
 });
 
@@ -176,33 +171,32 @@ loginBtn.addEventListener('click', async () => {
         });
         
         const data = await res.json();
-        if (res.ok) {
-            token = data.token;
-            localStorage.setItem('token', token);
-            currentUser = data.user;
-            
-            if (currentUser.username === 'SwargBot') {
-                showScreen('bot');
-                loadBotMessages();
-            } else {
-                showScreen('main');
-                updateSidebar();
-                connectSocket();
-                loadFeed();
-                loadChats();
-                loadGroups();
-                loadContacts();
-                loadSettings();
-                // साइडबार बंद करें अगर खुला हो
-                sidebar.classList.remove('active');
-            }
-            loginError.innerText = '';
-        } else {
-            loginError.innerText = '❌ ' + (data.error || 'गलत यूज़रनेम/पासवर्ड');
+        if (!res.ok) {
+            throw new Error(data.error || `HTTP ${res.status}`);
         }
+        
+        token = data.token;
+        localStorage.setItem('token', token);
+        currentUser = data.user;
+        
+        if (currentUser.username === 'SwargBot') {
+            showScreen('bot');
+            loadBotMessages();
+        } else {
+            showScreen('main');
+            updateSidebar();
+            connectSocket();
+            loadFeed();
+            loadChats();
+            loadGroups();
+            loadContacts();
+            loadSettings();
+            sidebar.classList.remove('active');
+        }
+        loginError.innerText = '';
     } catch (err) {
-        console.error(err);
-        loginError.innerText = '❌ सर्वर से कनेक्ट नहीं हो सका। सुनिश्चित करें कि सर्वर चल रहा है।';
+        console.error('Login error:', err);
+        loginError.innerText = '❌ ' + err.message;
     }
 });
 
@@ -228,7 +222,8 @@ function connectSocket() {
     socket = io({
         query: { token },
         transports: ['websocket'],
-        reconnection: true
+        reconnection: true,
+        reconnectionAttempts: 5
     });
     
     socket.on('connect', () => {
@@ -242,13 +237,11 @@ function connectSocket() {
     });
 
     socket.on('private message', (msg) => {
-        if (currentChat && currentChat.type === 'private' && currentChat.userId === msg.senderId) {
+        if (currentChat && currentChat.type === 'private' && currentChat.userId === msg.sender) {
             displayMessage(msg, 'received');
-            // Mark as read
             socket.emit('mark read', { messageId: msg._id });
         }
-        loadChats(); // चैट लिस्ट अपडेट
-        showNotification('नया मैसेज', msg.text);
+        loadChats();
     });
 
     socket.on('group message', (msg) => {
@@ -258,39 +251,29 @@ function connectSocket() {
         loadGroups();
     });
 
-    socket.on('message status', (data) => {
-        const msgDiv = document.querySelector(`[data-msg-id="${data.messageId}"]`);
-        if (msgDiv) {
-            const statusSpan = msgDiv.querySelector('.message-status');
-            if (statusSpan) statusSpan.innerHTML = '✓✓';
-        }
-    });
-
     socket.on('system message', (data) => {
-        // बॉट का वर्ल्ड मैसेज
         alert('🌍 ' + data.text);
     });
 }
 
-// ===================== नोटिफिकेशन =====================
-function showNotification(title, body) {
-    if (Notification.permission === 'granted') {
-        new Notification(title, { body });
-    } else if (Notification.permission !== 'denied') {
-        Notification.requestPermission().then(perm => {
-            if (perm === 'granted') {
-                new Notification(title, { body });
-            }
-        });
-    }
-}
-
-// ===================== साइडबार अपडेट =====================
+// ===================== साइडबार =====================
 function updateSidebar() {
     sidebarName.innerText = currentUser.name;
     sidebarUsername.innerText = '@' + currentUser.username;
-    sidebarDp.src = currentUser.dp ? currentUser.dp : 'https://via.placeholder.com/80';
+    sidebarDp.src = currentUser.dp || 'https://via.placeholder.com/80';
 }
+
+menuToggle.addEventListener('click', () => {
+    sidebar.classList.toggle('active');
+});
+
+document.addEventListener('click', (e) => {
+    if (window.innerWidth < 768) {
+        if (!sidebar.contains(e.target) && !menuToggle.contains(e.target)) {
+            sidebar.classList.remove('active');
+        }
+    }
+});
 
 // ===================== फीड =====================
 async function loadFeed() {
@@ -306,8 +289,7 @@ async function loadFeed() {
             feedPosts.appendChild(postEl);
         });
     } catch (err) {
-        console.log(err);
-        feedPosts.innerHTML = '<p style="text-align:center; color:var(--text-secondary);">कोई पोस्ट नहीं या लोड नहीं हो सका</p>';
+        feedPosts.innerHTML = '<p style="text-align:center; color:var(--text-secondary);">कोई पोस्ट नहीं</p>';
     }
 }
 
@@ -347,13 +329,11 @@ function createPostElement(post) {
 
 async function toggleLike(postId) {
     try {
-        const res = await fetch(API_BASE + `/api/post/${postId}/like`, {
+        await fetch(API_BASE + `/api/post/${postId}/like`, {
             method: 'POST',
             headers: { 'Authorization': 'Bearer ' + token }
         });
-        if (res.ok) {
-            loadFeed();
-        }
+        loadFeed();
     } catch (err) {}
 }
 
@@ -388,7 +368,6 @@ async function loadChats() {
         const res = await fetch(API_BASE + '/api/chats', {
             headers: { 'Authorization': 'Bearer ' + token }
         });
-        if (!res.ok) throw new Error();
         const chats = await res.json();
         chatList.innerHTML = '';
         if (chats.length === 0) {
@@ -408,9 +387,7 @@ async function loadChats() {
             div.addEventListener('click', () => openChat(chat.user));
             chatList.appendChild(div);
         });
-    } catch (err) {
-        chatList.innerHTML = '<p style="text-align:center; color:var(--text-secondary);">चैट लोड नहीं हुई</p>';
-    }
+    } catch (err) {}
 }
 
 function openChat(user) {
@@ -438,13 +415,9 @@ async function loadMessages(userId) {
 function displayMessage(msg, type) {
     const div = document.createElement('div');
     div.className = `message ${type}`;
-    div.setAttribute('data-msg-id', msg._id);
     div.innerHTML = `
         <div>${msg.text}</div>
-        <div class="message-time">
-            ${formatTime(msg.createdAt)}
-            ${type === 'sent' ? `<span class="message-status">${msg.status === 'read' ? '✓✓' : '✓'}</span>` : ''}
-        </div>
+        <div class="message-time">${formatTime(msg.createdAt)}</div>
     `;
     messagesDiv.appendChild(div);
 }
@@ -575,252 +548,9 @@ createGroupBtn.addEventListener('click', async () => {
     const name = prompt('ग्रुप का नाम दें:');
     if (!name) return;
     try {
-        const res = await fetch(API_BASE + '/api/group', {
+        await fetch(API_BASE + '/api/group', {
             method: 'POST',
             headers: {
                 'Authorization': 'Bearer ' + token,
                 'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ name })
-        });
-        if (res.ok) {
-            loadGroups();
-        }
-    } catch (err) {}
-});
-
-// ===================== कॉन्टैक्ट =====================
-async function loadContacts() {
-    try {
-        const res = await fetch(API_BASE + '/api/contacts', {
-            headers: { 'Authorization': 'Bearer ' + token }
-        });
-        const contacts = await res.json();
-        contactList.innerHTML = '';
-        if (contacts.length === 0) {
-            contactList.innerHTML = '<p style="text-align:center; color:var(--text-secondary);">कोई कॉन्टैक्ट नहीं</p>';
-            return;
-        }
-        contacts.forEach(contact => {
-            const div = document.createElement('div');
-            div.className = 'contact-item';
-            div.innerHTML = `
-                <img src="${contact.user.dp || 'https://via.placeholder.com/50'}">
-                <div>
-                    <h4>${contact.customName || contact.user.name}</h4>
-                    <p>@${contact.user.username}</p>
-                </div>
-            `;
-            div.addEventListener('click', () => {
-                openChat(contact.user);
-                document.querySelector('[data-screen="chats"]').click();
-            });
-            contactList.appendChild(div);
-        });
-    } catch (err) {}
-}
-
-addContactBtn.addEventListener('click', async () => {
-    const phone = contactPhone.value.trim();
-    const customName = contactName.value.trim();
-    if (!phone) {
-        alert('फोन नंबर दर्ज करें');
-        return;
-    }
-    try {
-        const res = await fetch(API_BASE + '/api/contact', {
-            method: 'POST',
-            headers: {
-                'Authorization': 'Bearer ' + token,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ phoneNumber: phone, customName: customName || undefined })
-        });
-        if (res.ok) {
-            contactPhone.value = '';
-            contactName.value = '';
-            loadContacts();
-            alert('कॉन्टैक्ट सेव हो गया');
-        } else {
-            const data = await res.json();
-            alert(data.error || 'यूज़र नहीं मिला');
-        }
-    } catch (err) {}
-});
-
-// ===================== सेटिंग =====================
-function loadSettings() {
-    settingsName.value = currentUser.name;
-    settingsUsername.value = currentUser.username;
-    settingsDpPreview.src = currentUser.dp || 'https://via.placeholder.com/80';
-}
-
-updateProfile.addEventListener('click', async () => {
-    const name = settingsName.value.trim();
-    const username = settingsUsername.value.trim();
-    const file = settingsDp.files[0];
-    const formData = new FormData();
-    if (name) formData.append('name', name);
-    if (username) formData.append('username', username);
-    if (file) formData.append('dp', file);
-    
-    try {
-        const res = await fetch(API_BASE + '/api/user', {
-            method: 'PUT',
-            headers: { 'Authorization': 'Bearer ' + token },
-            body: formData
-        });
-        if (res.ok) {
-            const updated = await res.json();
-            currentUser = updated;
-            updateSidebar();
-            alert('प्रोफाइल अपडेट हो गया');
-            loadSettings();
-        }
-    } catch (err) {}
-});
-
-changePassword.addEventListener('click', async () => {
-    const old = oldPassword.value;
-    const newPwd = newPassword.value;
-    if (!old || !newPwd) {
-        alert('दोनों पासवर्ड भरें');
-        return;
-    }
-    try {
-        const res = await fetch(API_BASE + '/api/user/password', {
-            method: 'PUT',
-            headers: {
-                'Authorization': 'Bearer ' + token,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ oldPassword: old, newPassword: newPwd })
-        });
-        if (res.ok) {
-            alert('पासवर्ड बदल गया');
-            oldPassword.value = '';
-            newPassword.value = '';
-        } else {
-            alert('पुराना पासवर्ड गलत है');
-        }
-    } catch (err) {}
-});
-
-// ===================== नेविगेशन =====================
-navBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-        navBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const screenId = btn.dataset.screen;
-        contentScreens.forEach(s => s.classList.remove('active'));
-        document.getElementById(screenId + '-screen').classList.add('active');
-        
-        // मोबाइल पर साइडबार बंद करें
-        sidebar.classList.remove('active');
-        
-        if (screenId === 'feed') loadFeed();
-        else if (screenId === 'chats') loadChats();
-        else if (screenId === 'groups') loadGroups();
-        else if (screenId === 'contacts') loadContacts();
-        else if (screenId === 'settings') loadSettings();
-    });
-});
-
-menuToggle.addEventListener('click', () => {
-    sidebar.classList.toggle('active');
-});
-
-// साइडबार के बाहर क्लिक करने पर बंद करें
-document.addEventListener('click', (e) => {
-    if (window.innerWidth < 768) {
-        if (!sidebar.contains(e.target) && !menuToggle.contains(e.target)) {
-            sidebar.classList.remove('active');
-        }
-    }
-});
-
-loginTab.addEventListener('click', () => {
-    loginTab.classList.add('active');
-    registerTab.classList.remove('active');
-    loginForm.classList.add('active');
-    registerForm.classList.remove('active');
-});
-
-registerTab.addEventListener('click', () => {
-    registerTab.classList.add('active');
-    loginTab.classList.remove('active');
-    registerForm.classList.add('active');
-    loginForm.classList.remove('active');
-});
-
-// ===================== बॉट फंक्शन =====================
-function loadBotMessages() {
-    botMessagesDiv.innerHTML = '<p style="text-align:center; color:var(--text-secondary);">🌍 यहाँ लिखकर दुनिया को संदेश भेजें</p>';
-}
-
-sendBotMessage.addEventListener('click', async () => {
-    const msg = botMessage.value.trim();
-    if (!msg) return;
-    try {
-        const res = await fetch(API_BASE + '/api/bot/world', {
-            method: 'POST',
-            headers: {
-                'Authorization': 'Bearer ' + token,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ message: msg })
-        });
-        if (res.ok) {
-            const div = document.createElement('div');
-            div.className = 'message sent';
-            div.innerHTML = `<div>${msg}</div><div class="message-time">अभी</div>`;
-            botMessagesDiv.appendChild(div);
-            botMessage.value = '';
-            botMessagesDiv.scrollTop = botMessagesDiv.scrollHeight;
-        } else {
-            alert('केवल बॉट ही वर्ल्ड मैसेज भेज सकता है');
-        }
-    } catch (err) {}
-});
-
-// ===================== इनिशियल चेक =====================
-async function checkLogin() {
-    if (token) {
-        try {
-            const res = await fetch(API_BASE + '/api/me', { 
-                headers: { 'Authorization': 'Bearer ' + token } 
-            });
-            if (res.ok) {
-                const user = await res.json();
-                currentUser = user;
-                if (user.username === 'SwargBot') {
-                    showScreen('bot');
-                    loadBotMessages();
-                } else {
-                    showScreen('main');
-                    updateSidebar();
-                    connectSocket();
-                    loadFeed();
-                    loadChats();
-                    loadGroups();
-                    loadContacts();
-                    loadSettings();
-                    // नोटिफिकेशन परमिशन
-                    if (Notification.permission === 'default') {
-                        Notification.requestPermission();
-                    }
-                }
-            } else {
-                localStorage.removeItem('token');
-                showScreen('auth');
-            }
-        } catch (err) {
-            localStorage.removeItem('token');
-            showScreen('auth');
-        }
-    } else {
-        showScreen('auth');
-    }
-}
-
-checkLogin();
+  
